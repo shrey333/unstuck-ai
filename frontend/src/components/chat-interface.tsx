@@ -36,10 +36,10 @@ export function ChatInterface() {
     
     // Show toast notification
     showToast("Started a new chat", "success");
-  }, []);
+  }, [showToast]);
 
   // Simplified error handling
-  const handleError = (error: unknown) => {
+  const handleError = useCallback((error: unknown) => {
     console.error("Error:", error);
 
     // Handle common API errors
@@ -59,7 +59,7 @@ export function ChatInterface() {
 
     // Default error message
     showToast("An error occurred. Please try again.", "error");
-  };
+  }, [showToast]);
 
   // Handle file upload
   const handleFileUpload = useCallback(async (files: FileList) => {
@@ -98,7 +98,7 @@ export function ChatInterface() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [handleError]);
 
   // Handle form submission
   const handleSubmit = useCallback(
@@ -145,7 +145,7 @@ export function ChatInterface() {
         setIsLoading(false);
       }
     },
-    [input, isLoading]
+    [input, isLoading, handleError]
   );
 
   // Scroll to bottom when messages change
