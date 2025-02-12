@@ -16,7 +16,6 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: SecretStr
     ALLOWED_HOSTS: tuple[str, ...] = ("*",)
-    ALLOW_ORIGINS: tuple[str, ...] = ("*",)  # Default to local frontend
 
     # Vector Store
     PINECONE_API_KEY: SecretStr
