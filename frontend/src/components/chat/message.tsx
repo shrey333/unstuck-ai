@@ -48,16 +48,11 @@ export function ChatMessage({ message }: ChatMessageProps) {
                 {children}
               </a>
             ),
-            code: ({ inline, children }) =>
-              inline ? (
-                <code className="px-1 py-0.5 bg-muted rounded text-sm font-mono">
-                  {children}
-                </code>
-              ) : (
-                <pre className="p-3 bg-muted rounded-lg overflow-x-auto">
-                  <code className="text-sm font-mono">{children}</code>
-                </pre>
-              ),
+            code: ({ children }) => (
+              <code className="px-1 py-0.5 bg-muted rounded text-sm font-mono">
+                {children}
+              </code>
+            ),
             blockquote: ({ children }) => (
               <blockquote className="border-l-2 border-muted-foreground pl-4 italic">
                 {children}
