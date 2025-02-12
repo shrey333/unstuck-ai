@@ -1,0 +1,66 @@
+name: Deploy Backend to AWS Lambda
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - 'terraform/**'
+      - '.github/workflows/deploy-backend.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.7.1
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v2
+      with:
+        terraform_version: "1.5.7"
+
+    - name: Install dependencies
+      working-directory: backend
+      run: |
+        poetry install --no-interaction --no-root
+        poetry add mangum
+
+    - name: Create Lambda package
+      working-directory: backend
+      run: |
+        mkdir -p package
+        poetry build
+        poetry run pip install --target ./package/python .
+        cd package/python
+        zip -r ../lambda.zip .
+        cd ..
+        zip -g lambda.zip ../src/lambda_handler.py
+
+    - name: Terraform Init
+      working-directory: terraform
+      run: terraform init
+
+    - name: Terraform Plan
+      working-directory: terraform
+      run: terraform plan -out=tfplan
+
+    - name: Terraform Apply
+      working-directory: terraform
+      run: terraform apply -auto-approve tfplan

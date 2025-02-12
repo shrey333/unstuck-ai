@@ -46,3 +46,10 @@ yarn-error.log*
 # Project specific
 uploads/
 *.log
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+tfplan
