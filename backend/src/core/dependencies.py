@@ -13,6 +13,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_community.cache import RedisCache
 from langchain.embeddings import CacheBackedEmbeddings
 from langchain_community.storage import RedisStore
+from langchain_core.globals import set_llm_cache
 
 
 @lru_cache()
@@ -38,7 +39,7 @@ def get_vectorstore(settings: Settings | None = None) -> PineconeVectorStore:
         google_api_key=settings.GOOGLE_API_KEY.get_secret_value(),
     )
 
-    redis_client = get_redis_client(settings, for_cache=True)
+    redis_client = get_redis_client(settings)
 
     cached_embedder = CacheBackedEmbeddings.from_bytes_store(
         embeddings, RedisStore(client=redis_client), namespace=embeddings.model
@@ -49,10 +50,7 @@ def get_vectorstore(settings: Settings | None = None) -> PineconeVectorStore:
 
 
 @lru_cache()
-def get_redis_client(
-    settings: Settings | None = None,
-    for_cache: bool = False,
-) -> redis.Redis:
+def get_redis_client(settings: Settings | None = None) -> redis.Redis:
     """Get Redis client.
 
     Args:
@@ -62,26 +60,12 @@ def get_redis_client(
     if settings is None:
         settings = get_settings()
 
-    if for_cache:
-        # Client for LangChain cache (expects bytes)
-        return redis.Redis(
-            host=str(settings.UPSTASH_REDIS_URL),
-            port=6379,
-            password=settings.UPSTASH_REDIS_TOKEN.get_secret_value(),
-            ssl=True,
-            encoding="utf-8",  # Keep encoding but disable auto-decode
-            decode_responses=False,
-        )
-    else:
-        # Client for general use (returns strings)
-        return redis.Redis(
-            host=str(settings.UPSTASH_REDIS_URL),
-            port=6379,
-            password=settings.UPSTASH_REDIS_TOKEN.get_secret_value(),
-            ssl=True,
-            encoding="utf-8",
-            decode_responses=True,
-        )
+    return redis.Redis(
+        host=str(settings.UPSTASH_REDIS_URL),
+        port=6379,
+        password=settings.UPSTASH_REDIS_TOKEN.get_secret_value(),
+        ssl=True,
+    )
 
 
 @lru_cache()
@@ -92,9 +76,9 @@ def get_llm_client(
     if settings is None:
         settings = get_settings()
 
-    redis_client = get_redis_client(settings, for_cache=True)
+    redis_client = get_redis_client(settings)
 
-    llm_cache = RedisCache(redis_client)
+    set_llm_cache(RedisCache(redis_client))
 
     llm = ChatGoogleGenerativeAI(
         model=settings.CHAT_MODEL,
