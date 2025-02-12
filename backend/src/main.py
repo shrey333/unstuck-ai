@@ -12,7 +12,7 @@ def create_application() -> FastAPI:
     app = FastAPI(
         title=settings.PROJECT_NAME,
         description="""
-        🤖 Unstuck AI API Documentation
+        Unstuck AI API Documentation
         
         ## Features
         * AI-powered assistance
@@ -51,7 +51,7 @@ def create_application() -> FastAPI:
     # Configure CORS with specific origin
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:3000"],  # Frontend URL
+        allow_origins=settings.ALLOW_ORIGINS,  # Get from settings
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

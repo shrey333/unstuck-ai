@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: SecretStr
     ALLOWED_HOSTS: tuple[str, ...] = ("*",)
+    ALLOW_ORIGINS: list[str] = ["http://localhost:3000"]  # Default to local frontend
 
     # Vector Store
     PINECONE_API_KEY: SecretStr
