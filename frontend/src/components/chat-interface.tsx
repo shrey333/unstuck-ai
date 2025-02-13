@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Send, Plus } from "lucide-react";
@@ -25,80 +25,129 @@ export function ChatInterface() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const { showToast } = useToast();
 
+  // Clear session on page load
+  useEffect(() => {
+    // Clear cookie
+    document.cookie = "chat_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    
+    // Clear messages
+    setMessages([]);
+    
+    // Clear input
+    setInput("");
+    
+    // Reset loading state
+    setIsLoading(false);
+  }, []); // Empty dependency array means this runs once on mount
+
   // Handle starting a new chat
   const handleNewChat = useCallback(() => {
     // Clear messages
     setMessages([]);
+
+    // Clear input
     setInput("");
-    
-    // Clear chat_id cookie
+
+    // Clear cookie
     document.cookie = "chat_id=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    
+
     // Show toast notification
     showToast("Started a new chat", "success");
   }, [showToast]);
 
   // Simplified error handling
-  const handleError = useCallback((error: unknown) => {
-    console.error("Error:", error);
+  const handleError = useCallback(
+    (error: unknown) => {
+      console.error("Error:", error);
 
-    // Handle common API errors
-    if (error instanceof APIError) {
-      const message = error.status === 413 ? "File too large. Please upload a smaller file."
-        : error.status === 415 ? "Unsupported file type. Please upload a PDF file."
-        : "Server error. Please try again.";
-      showToast(message, "error");
-      return;
-    }
+      // Handle common API errors
+      if (error instanceof APIError) {
+        const message =
+          error.status === 413
+            ? "File too large. Please upload a smaller file."
+            : error.status === 415
+            ? "Unsupported file type. Please upload a PDF file."
+            : "Server error. Please try again.";
+        showToast(message, "error");
+        return;
+      }
 
-    // Handle network errors
-    if (error instanceof TypeError && error.message === "Failed to fetch") {
-      showToast("Network error: Please check your connection", "error");
-      return;
-    }
+      // Handle network errors
+      if (error instanceof TypeError && error.message === "Failed to fetch") {
+        showToast("Network error: Please check your connection", "error");
+        return;
+      }
 
-    // Default error message
-    showToast("An error occurred. Please try again.", "error");
-  }, [showToast]);
+      // Default error message
+      showToast("An error occurred. Please try again.", "error");
+    },
+    [showToast]
+  );
 
   // Handle file upload
-  const handleFileUpload = useCallback(async (files: FileList) => {
-    // Validate file types
-    const invalidFiles = Array.from(files).filter(
-      (file) => !file.type.includes("pdf")
-    );
-    if (invalidFiles.length > 0) {
-      handleError(new Error("Only PDF files are supported"));
-      return;
-    }
+  const handleFileUpload = useCallback(
+    async (files: FileList) => {
+      // Validate file types
+      const invalidFiles = Array.from(files).filter(
+        (file) => !file.type.includes("pdf")
+      );
+      if (invalidFiles.length > 0) {
+        handleError(new Error("Only PDF files are supported"));
+        return;
+      }
 
-    setIsLoading(true);
+      setIsLoading(true);
 
-    try {
-      await uploadFiles(files);
-
-      // Create a nicely formatted message showing uploaded files
+      // Add loading message immediately
       const fileList = Array.from(files)
         .map((file) => `- ${file.name} (${formatFileSize(file.size)})`)
         .join("\n");
 
-      const uploadMessage = `📚 Uploaded ${files.length} document${
-        files.length > 1 ? "s" : ""
-      }:\n${fileList}`;
+      // Generate a unique ID for this upload
+      const uploadId = Date.now().toString();
 
       setMessages((prev) => [
         ...prev,
         {
+          id: uploadId,
           role: "user",
-          content: uploadMessage,
+          content: `📚 Uploading ${files.length} document${
+            files.length > 1 ? "s" : ""
+          }:\n${fileList}`,
+          isLoading: true,
         },
       ]);
-    } catch (error) {
-      handleError(error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [handleError]);
+
+      try {
+        await uploadFiles(files);
+
+        // Update the loading message with success
+        setMessages((prev) => {
+          const newMessages = [...prev];
+          const uploadMessageIndex = newMessages.findIndex(msg => msg.id === uploadId);
+          
+          if (uploadMessageIndex !== -1) {
+            newMessages[uploadMessageIndex] = {
+              ...newMessages[uploadMessageIndex],
+              content: `📚 Uploaded ${files.length} document${
+                files.length > 1 ? "s" : ""
+              }:\n${fileList}`,
+              isLoading: false,
+            };
+          }
+          
+          return newMessages;
+        });
+      } catch (error) {
+        // Remove the specific loading message on error
+        setMessages((prev) => prev.filter(msg => msg.id !== uploadId));
+        handleError(error);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [handleError]
+  );
 
   // Handle form submission
   const handleSubmit = useCallback(
@@ -108,7 +157,7 @@ export function ChatInterface() {
 
       const question = input.trim();
       setInput("");
-      
+
       // Add user message immediately without loading state
       setMessages((prev) => [...prev, { role: "user", content: question }]);
       setIsLoading(true);

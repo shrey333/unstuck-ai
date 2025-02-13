@@ -1,12 +1,10 @@
 import React from "react";
 import * as HoverCard from "@radix-ui/react-hover-card";
+import { Source } from "@/types/chat";
 
 interface SourceReferenceProps {
   id: string;
-  source: {
-    content: string;
-    source: string;
-  };
+  source: Source;
 }
 
 function truncateText(text: string, maxLength: number = 200) {

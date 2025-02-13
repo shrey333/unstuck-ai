@@ -4,14 +4,104 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import { Message } from "@/types/chat";
 import { SourceReference } from "./source-reference";
+import { Loader2, FileText } from "lucide-react";
 
 interface ChatMessageProps {
   message: Message;
 }
 
+function FileUploadMessage({
+  content,
+  isLoading,
+}: {
+  content: string;
+  isLoading?: boolean;
+}) {
+  const fileMatches = content.matchAll(/- (.+\.pdf) \((.+)\)/g);
+  const files = Array.from(fileMatches).map((match) => ({
+    name: match[1],
+    size: match[2],
+  }));
+
+  return (
+    <div
+      className="space-y-2"
+      role="status"
+      aria-live="polite"
+      aria-busy={isLoading}
+    >
+      <div className="flex items-center gap-2 text-sm">
+        {isLoading ? (
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <span className="font-medium">Uploading documents...</span>
+          </>
+        ) : (
+          <>
+            <span
+              className="font-medium"
+              aria-label="Documents uploaded successfully"
+            >
+              <span aria-hidden="true">📚</span> Documents uploaded
+            </span>
+          </>
+        )}
+      </div>
+      {files.length > 0 && (
+        <div
+          className="flex flex-wrap gap-2"
+          role="list"
+          aria-label="Uploaded files"
+        >
+          {files.map((file, i) => (
+            <div
+              key={i}
+              role="listitem"
+              className="inline-flex items-center gap-2 px-3 py-1.5 bg-muted rounded-full text-sm"
+            >
+              <FileText
+                className="h-4 w-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="text-muted-foreground font-medium truncate max-w-[200px]">
+                {file.name}
+              </span>
+              <span className="text-muted-foreground whitespace-nowrap">
+                <span className="sr-only">File size:</span>
+                {file.size}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+      {isLoading && (
+        <div className="sr-only" role="alert" aria-live="assertive">
+          Uploading {files.length} document{files.length !== 1 ? "s" : ""}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ChatMessage({ message }: ChatMessageProps) {
+  // Handle file upload messages
+  if (message.content?.includes("📚")) {
+    return (
+      <FileUploadMessage
+        content={message.content}
+        isLoading={message.isLoading}
+      />
+    );
+  }
+
+  // Handle general loading state
   if (message.isLoading) {
-    return <div className="animate-pulse">Thinking...</div>;
+    return (
+      <div className="flex items-center gap-2 text-muted-foreground">
+        <Loader2 className="h-4 w-4 animate-spin" />
+        <span>Thinking...</span>
+      </div>
+    );
   }
 
   // Create a map of referenced sources
@@ -27,7 +117,6 @@ export function ChatMessage({ message }: ChatMessageProps) {
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeRaw]}
           components={{
-            // Override default element styling
             p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
             ul: ({ children }) => (
               <ul className="list-disc pl-4 mb-2 last:mb-0">{children}</ul>
@@ -67,7 +156,6 @@ export function ChatMessage({ message }: ChatMessageProps) {
             h3: ({ children }) => (
               <h3 className="text-base font-bold mb-2">{children}</h3>
             ),
-            // Handle span elements directly
             span: ({ id, children }) => {
               if (id && sourceMap?.[id]) {
                 return (
