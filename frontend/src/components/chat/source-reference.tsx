@@ -20,9 +20,9 @@ export function SourceReference({ id, source }: SourceReferenceProps) {
       <HoverCard.Trigger asChild>
         <span
           id={id}
-          className="inline-block text-primary cursor-help hover:underline"
+          className="inline-block text-primary cursor-help bg-blue-100 rounded-md px-2 hover:underline"
         >
-          [{id}]
+          {id}
         </span>
       </HoverCard.Trigger>
       <HoverCard.Portal>

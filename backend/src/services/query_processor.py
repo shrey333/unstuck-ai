@@ -12,14 +12,16 @@ from langgraph.store.base import BaseStore
 from langchain_core.runnables import RunnableConfig
 from langgraph.prebuilt import InjectedStore
 from langgraph.store.memory import InMemoryStore
+from typing import List
 
-from src.core.dependencies import get_llm_client, get_vectorstore
+from src.core.dependencies import get_llm_client, get_vectorstore, get_redis_client
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
 llm = get_llm_client()
 vector_store = get_vectorstore()
+redis_client = get_redis_client()
 
 
 class State(MessagesState):
@@ -28,19 +30,45 @@ class State(MessagesState):
 
 @tool(response_format="content_and_artifact")
 def retrieve(
-    query: str, config: RunnableConfig, store: Annotated[BaseStore, InjectedStore()]
+    query: str,
+    config: RunnableConfig,
+    store: Annotated[BaseStore, InjectedStore()],
+    filenames: List[str] = None,  # Optional list of filenames to filter by
 ):
-    """Retrieve information related to a query and chat_id. You have access to documents
-    related to the question."""
+    """Retrieve information related to a query, filenames and chat_id. You have access to documents
+    related to the question.
+
+    Args:
+        query: The search query
+        config: Configuration containing chat_id
+        store: Document store
+        filenames: Optional list of filenames to filter results by specific documents
+    """
     chat_id = config.get("configurable", {}).get("thread_id")
-    retrieved_docs = vector_store.similarity_search(
-        query, k=5, filter={"chat_id": chat_id}
-    )
+    filter_dict = {"chat_id": chat_id}
+
+    # Add filenames filter if provided
+    if filenames:
+        if len(filenames) == 1:
+            filter_dict["source"] = filenames[0]
+        else:
+            # For multiple files, use $in operator to match any of the files
+            filter_dict["source"] = {"$in": filenames}
+
+    retrieved_docs = vector_store.similarity_search(query, k=5, filter=filter_dict)
     serialized = "\n\n".join(
         (f"Source: {doc.metadata}\n" f"Content: {doc.page_content}")
         for doc in retrieved_docs
     )
     return serialized, retrieved_docs
+
+
+def get_available_documents(chat_id: str) -> list[str]:
+    """Get list of available documents for a chat session from Redis."""
+    files_key = f"files:{chat_id}"
+    files = redis_client.smembers(files_key)
+    # Decode bytes to strings
+    return sorted(file.decode("utf-8") for file in files) if files else []
 
 
 def query_or_respond(state: State):
@@ -69,7 +97,7 @@ def generate(state: State):
     docs_content = "\n\n".join(doc.content for doc in tool_messages)
     system_message_content = f"""
         You are an assistant for question-answering tasks. 
-         If you don't know the answer, say that you don't know. 
+        If you don't know the answer, say that you don't know. 
         You have access to documents related to the question. \n\n
         Instructions for formatting the response:
             1. Use markdown formatting to make the answer more readable:
@@ -135,8 +163,19 @@ async def process_query(query: str, chat_id: str):
             {"configurable": {"chat_id": chat_id, "thread_id": chat_id}}
         )
 
+        # Get available documents from Redis
+        available_docs = get_available_documents(chat_id)
+        files_context = (
+            "Available documents: " + ", ".join(available_docs)
+            if available_docs
+            else "No documents available"
+        )
+
         final_step = graph.invoke(
-            {"messages": [{"role": "user", "content": query}]},
+            {
+                "messages": [{"role": "user", "content": query + "\n" + files_context}],
+                "config": {"thread_id": chat_id},
+            },
             config=config,
         )
 

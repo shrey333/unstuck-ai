@@ -1,10 +1,19 @@
-from fastapi import APIRouter, UploadFile, File, Request, Response, Depends, HTTPException, status
+from fastapi import (
+    APIRouter,
+    UploadFile,
+    File,
+    Request,
+    Response,
+    Depends,
+    HTTPException,
+    status,
+)
 from uuid import uuid4
 from typing import List
 from pydantic import BaseModel
 
 
-from src.core.dependencies import get_vectorstore
+from src.core.dependencies import get_vectorstore, get_redis_client
 from src.services.document_loader import process_pdf
 from src.core.config import get_settings
 
@@ -17,6 +26,7 @@ SESSION_TTL_SECONDS = 3 * 60 * 60  # e.g., sessions expire in 1 hour
 
 class UploadResponse(BaseModel):
     """Response model for document upload"""
+
     chat_id: str
     total_chunks: int
     filenames: List[str]
@@ -27,7 +37,7 @@ class UploadResponse(BaseModel):
                 "example": {
                     "chat_id": "550e8400-e29b-41d4-a716-446655440000",
                     "total_chunks": 42,
-                    "filenames": ["document1.pdf", "document2.pdf"]
+                    "filenames": ["document1.pdf", "document2.pdf"],
                 }
             }
         }
@@ -67,18 +77,16 @@ def get_chat_id(request: Request, response: Response) -> str:
                     "example": {
                         "chat_id": "550e8400-e29b-41d4-a716-446655440000",
                         "total_chunks": 42,
-                        "filenames": ["document1.pdf", "document2.pdf"]
+                        "filenames": ["document1.pdf", "document2.pdf"],
                     }
                 }
-            }
+            },
         },
         400: {
             "description": "Invalid file format or corrupt PDF",
             "content": {
-                "application/json": {
-                    "example": {"detail": "Invalid PDF file format"}
-                }
-            }
+                "application/json": {"example": {"detail": "Invalid PDF file format"}}
+            },
         },
         413: {
             "description": "File too large",
@@ -86,9 +94,9 @@ def get_chat_id(request: Request, response: Response) -> str:
                 "application/json": {
                     "example": {"detail": "File size exceeds maximum limit"}
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 )
 async def upload_pdf(
     request: Request,
@@ -98,6 +106,7 @@ async def upload_pdf(
         description="List of PDF files to upload. Maximum size: 10MB per file.",
     ),
     vectorstore=Depends(get_vectorstore),
+    redis_client=Depends(get_redis_client),
 ) -> UploadResponse:
     chat_id = get_chat_id(request, response)
     all_docs = []
@@ -105,12 +114,12 @@ async def upload_pdf(
     filenames = []
 
     for file in files:
-        if not file.filename.lower().endswith('.pdf'):
+        if not file.filename.lower().endswith(".pdf"):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Only PDF files are supported"
+                detail="Only PDF files are supported",
             )
-            
+
         file_bytes = await file.read()
         docs = process_pdf(file_bytes)
         filenames.append(file.filename)
@@ -129,9 +138,12 @@ async def upload_pdf(
 
     if all_docs:
         vectorstore.add_documents(all_docs)
+        
+    # Store filenames in Redis with the same TTL as the session
+    files_key = f"files:{chat_id}"
+    redis_client.sadd(files_key, *filenames)
+    redis_client.expire(files_key, SESSION_TTL_SECONDS)
 
     return UploadResponse(
-        chat_id=chat_id,
-        total_chunks=total_chunks,
-        filenames=filenames
+        chat_id=chat_id, total_chunks=total_chunks, filenames=filenames
     )
