@@ -5,7 +5,7 @@ terraform {
       version = "~> 5.0"
     }
   }
-  
+
   backend "s3" {
     bucket = "unstuck-ai-terraform-state"
     key    = "prod/terraform.tfstate"
@@ -19,13 +19,13 @@ provider "aws" {
 
 # Lambda function
 resource "aws_lambda_function" "api" {
-  filename         = var.lambda_package_path
-  function_name    = "${var.project_name}-${var.environment}"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "src.lambda_handler.handler"
-  runtime         = "python3.11"
-  timeout         = 30
-  memory_size     = 256
+  filename      = var.lambda_package_path
+  function_name = "${var.project_name}-${var.environment}"
+  role          = aws_iam_role.lambda_role.arn
+  handler       = "src.lambda_handler.handler"
+  runtime       = "python3.11"
+  timeout       = 30
+  memory_size   = 256
 
   environment {
     variables = {

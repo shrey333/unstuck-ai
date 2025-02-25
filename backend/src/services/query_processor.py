@@ -155,10 +155,12 @@ def create_query_graph():
     return graph_builder.compile(checkpointer=memory, store=docstore)
 
 
+graph = create_query_graph()
+
+
 async def process_query(query: str, chat_id: str):
     """Process a query using the graph-based approach."""
     try:
-        graph = create_query_graph()
         config = RunnableConfig(
             {"configurable": {"chat_id": chat_id, "thread_id": chat_id}}
         )
